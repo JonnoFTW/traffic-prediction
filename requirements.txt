@@ -2,3 +2,4 @@ pluck
 keras
 hyperas
 sklearn
+tabulate
