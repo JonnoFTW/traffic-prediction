@@ -37,21 +37,19 @@ def do_model(all_data):
     tts = train_test_split(features, labels, test_size=0.4)
     X_train = tts[0]
     X_test = tts[1]
-    Y_train = tts[2]
-    Y_test = tts[3]
+    Y_train = tts[2].astype(np.float64)
+    Y_test = tts[3].astype(np.float64)
     optimiser = 'adam'
-    hidden_neurons = {{choice([212, 230, 244, 256])}}
+    hidden_neurons = {{choice([128, 196, 212, 230, 244, 256])}}
     loss_function = 'mse'
     batch_size = {{choice([128, 148, 156, 164, 196])}}
     dropout = {{uniform(0, 1)}}
     dropout_inner = {{uniform(0,1)}}
-    extra_layer = {{choice([True])}}
+    extra_layer = {{choice([True, False])}}
 
 
     X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
     X_test = X_test.reshape(X_test.shape[0], 1, X_test.shape[1])
-    Y_train = Y_train.astype(np.float64)
-    Y_test = Y_test.astype(np.float64)
     print("X train shape:\t", X_train.shape)
     # print("X test shape:\t", X_test.shape)
     # print("Y train shape:\t", Y_train.shape)
@@ -95,23 +93,28 @@ def do_model(all_data):
                 self.best = current
 
     model = Sequential()
+    gpu_cpu = 'cpu'
     best_weight = BestWeight()
+    dense_input = hidden_neurons
     model.add(LSTM(output_dim=hidden_neurons, input_dim=X_test.shape[2], return_sequences=extra_layer, init='uniform',
-                   consume_less='cpu'))
+                   consume_less=gpu_cpu))
     model.add(Dropout(dropout))
+
     if extra_layer:
-        model.add(LSTM(input_dim=hidden_neurons, output_dim=hidden_neurons, return_sequences=False))
+        dense_input = hidden_neurons / 2
+        model.add(LSTM(input_dim=hidden_neurons, output_dim=dense_input, return_sequences=False, consume_less=gpu_cpu))
         model.add(Dropout(dropout_inner))
         model.add(Activation('relu'))
-    model.add(Dense(output_dim=out_neurons, input_dim=hidden_neurons, ))
+
+    model.add(Dense(output_dim=out_neurons, input_dim=dense_input, ))
     model.add(Activation('relu'))
     model.compile(loss=loss_function, optimizer=optimiser)
 
     history = model.fit(
         X_train, Y_train,
-        verbose=2,
+        verbose=1,
         batch_size=batch_size,
-        nb_epoch=1,
+        nb_epoch=30,
         validation_split=0.3,
         shuffle=False,
         callbacks=[best_weight]
@@ -155,14 +158,15 @@ if __name__ == "__main__":
         model=do_model,
         data=step_data,
         algo=tpe.suggest,
-        max_evals=2,
+        max_evals=20,
         trials=trials,
         extra={'steps': steps}
     )
     # put the trial results in
     client = pymongo.MongoClient(mongo_str)
+    trial_results = pluck.pluck(trials.results, 'metrics')
     results = client['mack0242']['hyperopt']
-    results.insert_many(pluck.pluck(trials.results, 'metrics'))
+    results.insert_many(trial_results)
 
     # print (best_run, best_model, trials.trials)
-    # print(tabulate.tabulate(sorted(results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))
+    print(tabulate.tabulate(sorted(trial_results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))

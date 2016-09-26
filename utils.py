@@ -13,6 +13,7 @@ def check_gpu():
 
 def load_data(fname, EPS):
     docX = []
+    print("Loading Data")
     with open(fname, 'r') as infile:
         reader = DictReader(infile)
         fields = reader.fieldnames
@@ -32,6 +33,7 @@ def load_data(fname, EPS):
                 max(1, sum(counts) + EPS)
             ]
             docX.append(x_row)
+    print("Data loaded")
     return np.array(docX)
 
 
