@@ -3,3 +3,4 @@ keras
 hyperas
 sklearn
 tabulate
+pyyaml

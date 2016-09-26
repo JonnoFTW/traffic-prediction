@@ -3,7 +3,7 @@ import numpy as np
 
 
 def geh(y_true, y_pred):
-    return np.sqrt(2*np.power(y_pred - y_true, 2)/(y_pred + y_true)).mean(axis=0)
+    return np.sqrt(2*np.power(y_pred - y_true, 2)/(y_pred + y_true)).mean(axis=0)[0]
 
 def mean_absolute_percentage_error(y_true, y_pred):
     """

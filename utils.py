@@ -2,6 +2,14 @@ from csv import DictReader
 from datetime import datetime
 import numpy as np
 
+def check_gpu():
+    from theano import function
+    import theano.tensor as T
+    f = function([], T.exp([9]))
+    if np.any([isinstance(x.op, T.Elemwise) for x in f.maker.fgraph.toposort()]):
+        print('Used the cpu')
+    else:
+        print('Used the gpu')
 
 def load_data(fname, EPS):
     docX = []

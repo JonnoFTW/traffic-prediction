@@ -11,15 +11,16 @@ from keras.layers.core import Dense, Activation, Dropout
 from keras.layers.recurrent import LSTM
 from keras.callbacks import ModelCheckpoint, EarlyStopping, Callback
 
+
 from hyperopt import Trials, STATUS_OK, tpe
 from hyperas import optim
 from hyperas.distributions import choice, uniform, conditional
 
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error
 
 from metrics import MASE, mean_absolute_percentage_error, median_percentage_error, rmse, smape, geh
-from utils import load_data, train_test_split
+from utils import load_data, train_test_split, check_gpu
 
 
 def step_data():
@@ -39,20 +40,24 @@ def do_model(all_data):
     Y_train = tts[2]
     Y_test = tts[3]
     optimiser = 'adam'
-    hidden_neurons = {{choice([212, 230, 256])}}
+    hidden_neurons = {{choice([212, 230, 244, 256])}}
     loss_function = 'mse'
     batch_size = {{choice([128, 148, 156, 164, 196])}}
     dropout = {{uniform(0, 1)}}
+    dropout_inner = {{uniform(0,1)}}
+    extra_layer = {{choice([True])}}
+
 
     X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
     X_test = X_test.reshape(X_test.shape[0], 1, X_test.shape[1])
     Y_train = Y_train.astype(np.float64)
     Y_test = Y_test.astype(np.float64)
     print("X train shape:\t", X_train.shape)
-    print("X test shape:\t", X_test.shape)
-    print("Y train shape:\t", Y_train.shape)
-    print("Y test shape:\t", Y_test.shape)
-    print("Steps:\t", _steps)
+    # print("X test shape:\t", X_test.shape)
+    # print("Y train shape:\t", Y_train.shape)
+    # print("Y test shape:\t", Y_test.shape)
+    # print("Steps:\t", _steps)
+    print("Extra layer:\t", extra_layer)
     in_neurons = X_train.shape[2]
 
     out_neurons = 1
@@ -91,17 +96,22 @@ def do_model(all_data):
 
     model = Sequential()
     best_weight = BestWeight()
-    model.add(LSTM(output_dim=hidden_neurons, input_dim=X_test.shape[2], return_sequences=False, init='uniform'))
+    model.add(LSTM(output_dim=hidden_neurons, input_dim=X_test.shape[2], return_sequences=extra_layer, init='uniform',
+                   consume_less='cpu'))
     model.add(Dropout(dropout))
+    if extra_layer:
+        model.add(LSTM(input_dim=hidden_neurons, output_dim=hidden_neurons, return_sequences=False))
+        model.add(Dropout(dropout_inner))
+        model.add(Activation('relu'))
     model.add(Dense(output_dim=out_neurons, input_dim=hidden_neurons, ))
     model.add(Activation('relu'))
     model.compile(loss=loss_function, optimizer=optimiser)
 
     history = model.fit(
         X_train, Y_train,
-        verbose=0,
+        verbose=2,
         batch_size=batch_size,
-        nb_epoch=2,
+        nb_epoch=1,
         validation_split=0.3,
         shuffle=False,
         callbacks=[best_weight]
@@ -124,26 +134,35 @@ def do_model(all_data):
         ('batch_size', batch_size),
         ('optimiser', optimiser),
         ('dropout', dropout),
+        ('extra_layer', extra_layer),
         ('loss function', loss_function)
         # 'history': history.history
     ])
     # print(metrics)
-    return {'loss': rmse_val, 'status': STATUS_OK, 'metrics': metrics}
+    return {'loss': -rmse_val, 'status': STATUS_OK, 'metrics': metrics}
 
 
 if __name__ == "__main__":
-    results = []
-    for i in [1, 3, 6, 9, 12]:
-        trials = Trials()
-        best_run, best_model = optim.minimize(
-            model=do_model,
-            data=step_data,
-            algo=tpe.suggest,
-            max_evals=1,
-            trials=trials,
-            extra={'steps':i}
-        )
-        results.extend(pluck.pluck(trials.results, 'metrics'))
+    import pymongo
+    import sys, os
+    steps = int(sys.argv[1])
+    mongo_str = os.getenv('pymongo_conn', None)
+    if not mongo_str:
+        quit("Please Provide `pymongo_conn` environment variable")
+    trials = Trials()
+    print("optimising network for {} steps".format(steps))
+    best_run, best_model = optim.minimize(
+        model=do_model,
+        data=step_data,
+        algo=tpe.suggest,
+        max_evals=2,
+        trials=trials,
+        extra={'steps': steps}
+    )
+    # put the trial results in
+    client = pymongo.MongoClient(mongo_str)
+    results = client['mack0242']['hyperopt']
+    results.insert_many(pluck.pluck(trials.results, 'metrics'))
 
     # print (best_run, best_model, trials.trials)
-    print(tabulate.tabulate(sorted(results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))
+    # print(tabulate.tabulate(sorted(results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))
