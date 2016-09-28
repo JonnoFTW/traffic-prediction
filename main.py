@@ -15,7 +15,6 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping, Callback
 from hyperopt import Trials, STATUS_OK, tpe
 from hyperas import optim
 from hyperas.distributions import choice, uniform, conditional
-
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
@@ -25,7 +24,7 @@ from utils import load_data, train_test_split, check_gpu
 
 def step_data():
     EPS = 1e-6
-    all_data = load_data('/scratch/Dropbox/PhD/htm_models_adelaide/engine/lane_data.csv', EPS)
+    all_data = load_data(FPATH, EPS)
     return all_data
 
 
@@ -148,7 +147,11 @@ def do_model(all_data):
 if __name__ == "__main__":
     import pymongo
     import sys, os
-    steps = int(sys.argv[1])
+    try:
+        steps = int(sys.argv[1])
+        file_path = sys.argv[2]
+    except IndexError:
+        quit("Usage is: main.py <steps> <file_path>")
     mongo_str = os.getenv('pymongo_conn', None)
     if not mongo_str:
         quit("Please Provide `pymongo_conn` environment variable")
@@ -160,13 +163,13 @@ if __name__ == "__main__":
         algo=tpe.suggest,
         max_evals=20,
         trials=trials,
-        extra={'steps': steps}
+        extra={'steps': steps, 'FPATH': file_path}
     )
     # put the trial results in
     client = pymongo.MongoClient(mongo_str)
     trial_results = pluck.pluck(trials.results, 'metrics')
-    results = client['mack0242']['hyperopt']
-    results.insert_many(trial_results)
+    # results = client['mack0242']['hyperopt']
+    # results.insert_many(trial_results)
 
     # print (best_run, best_model, trials.trials)
     print(tabulate.tabulate(sorted(trial_results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import subprocess
-import yaml
+import os
 
 if __name__ == "__main__":
-    with open('/home/mack0242/htm-models-adelaide/connection.yaml', 'r') as f:
-        conf = yaml.load(f)
-        pm_str = conf['mongo_uri']
+    pm_str = os.getenv('pymongo_conn', None)
+    if not pm_str:
+        exit("please provide a pymongo_conn as an env variable")
     for i in [1, 3, 6, 9, 12]:
         print (subprocess.check_output(
             ['qsub', '-cwd', '-l', 'high_gpu=1', '-N', 'traffic_predict_step_' + str(i), '-o',
