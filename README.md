@@ -17,7 +17,7 @@ Run using:
 python main.py 1 /path/to/some.csv
 ```
 
-The CSV should have a the following format:
+The CSV should have a the following format:rt
 ```
 timestamp,16,17,18,19,20,21
 2011-12-31 23:55:00,4,6,8,13,3,0

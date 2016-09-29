@@ -39,13 +39,17 @@ def do_model(all_data):
     Y_train = tts[2].astype(np.float64)
     Y_test = tts[3].astype(np.float64)
     optimiser = 'adam'
-    hidden_neurons = {{choice([128, 196, 212, 230, 244, 256])}}
+    hidden_neurons = {{choice([256, 300, 332])}} #tested already on : 128, 196, 212, 230, 244,
     loss_function = 'mse'
-    batch_size = {{choice([128, 148, 156, 164, 196])}}
-    dropout = {{uniform(0, 1)}}
+    batch_size = {{choice([96, 105, 128])}} # already did 148, 156, 164, 196
+    dropout = {{uniform(0, 0.1)}}
+    hidden_inner_factor = {{uniform(0.1, 1.1)}}
+    inner_hidden_neurons = int(hidden_inner_factor * hidden_neurons)
     dropout_inner = {{uniform(0,1)}}
-    extra_layer = {{choice([True, False])}}
 
+    extra_layer = {{choice([True, False])}}
+    if not extra_layer:
+        dropout_inner = 0
 
     X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
     X_test = X_test.reshape(X_test.shape[0], 1, X_test.shape[1])
@@ -92,7 +96,7 @@ def do_model(all_data):
                 self.best = current
 
     model = Sequential()
-    gpu_cpu = 'cpu'
+    gpu_cpu = 'gpu'
     best_weight = BestWeight()
     dense_input = hidden_neurons
     model.add(LSTM(output_dim=hidden_neurons, input_dim=X_test.shape[2], return_sequences=extra_layer, init='uniform',
@@ -100,12 +104,12 @@ def do_model(all_data):
     model.add(Dropout(dropout))
 
     if extra_layer:
-        dense_input = hidden_neurons / 2
-        model.add(LSTM(input_dim=hidden_neurons, output_dim=dense_input, return_sequences=False, consume_less=gpu_cpu))
+        dense_input = inner_hidden_neurons
+        model.add(LSTM(output_dim=dense_input, input_dim=hidden_neurons, return_sequences=False, consume_less=gpu_cpu))
         model.add(Dropout(dropout_inner))
         model.add(Activation('relu'))
 
-    model.add(Dense(output_dim=out_neurons, input_dim=dense_input, ))
+    model.add(Dense(output_dim=out_neurons, input_dim=dense_input))
     model.add(Activation('relu'))
     model.compile(loss=loss_function, optimizer=optimiser)
 
@@ -137,6 +141,8 @@ def do_model(all_data):
         ('optimiser', optimiser),
         ('dropout', dropout),
         ('extra_layer', extra_layer),
+        ('extra_layer_dropout', dropout_inner),
+        ('extra_layer_neurons', inner_hidden_neurons),
         ('loss function', loss_function)
         # 'history': history.history
     ])

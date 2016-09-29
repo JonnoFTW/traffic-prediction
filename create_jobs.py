@@ -10,5 +10,5 @@ if __name__ == "__main__":
         print (subprocess.check_output(
             ['qsub', '-cwd', '-l', 'high_gpu=1', '-N', 'traffic_predict_step_' + str(i), '-o',
              'out_$JOB_NAME.$JOB_ID.log', '-e', 'error_$JOB_NAME.$JOB_ID.log', '-v',
-             'site={},pymongo_conn={}'.format(i, pm_str),
+             'steps={},pymongo_conn={}'.format(i, pm_str),
              'job_runner.csh']))
