@@ -161,6 +161,8 @@ if __name__ == "__main__":
     mongo_str = os.getenv('pymongo_conn', None)
     if not mongo_str:
         quit("Please Provide `pymongo_conn` environment variable")
+    client = pymongo.MongoClient(mongo_str)
+    print("Started: "+str(datetime.now()))
     trials = Trials()
     print("optimising network for {} steps".format(steps))
     best_run, best_model = optim.minimize(
@@ -172,10 +174,10 @@ if __name__ == "__main__":
         extra={'steps': steps, 'FPATH': file_path}
     )
     # put the trial results in
-    client = pymongo.MongoClient(mongo_str)
     trial_results = pluck.pluck(trials.results, 'metrics')
-    # results = client['mack0242']['hyperopt']
-    # results.insert_many(trial_results)
+    results = client['mack0242']['hyperopt']
+    results.insert_many(trial_results)
 
     # print (best_run, best_model, trials.trials)
     print(tabulate.tabulate(sorted(trial_results, key=lambda x: (x['steps'], x['rmse'])), headers='keys'))
+    print("Finished: "+str(datetime.now()))
