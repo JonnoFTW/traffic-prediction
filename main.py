@@ -9,7 +9,7 @@ import tabulate
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.layers.recurrent import LSTM
-from keras.callbacks import ModelCheckpoint, EarlyStopping, Callback
+
 
 
 from hyperopt import Trials, STATUS_OK, tpe
@@ -19,13 +19,15 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
 from metrics import MASE, mean_absolute_percentage_error, median_percentage_error, rmse, smape, geh
-from utils import load_data, train_test_split, check_gpu
+from utils import load_data, train_test_split, check_gpu, BestWeight
 
 
 def step_data():
     EPS = 1e-6
     all_data = load_data(FPATH, EPS)
     return all_data
+
+
 
 
 def do_model(all_data):
@@ -63,37 +65,6 @@ def do_model(all_data):
 
     out_neurons = 1
 
-    class BestWeight(Callback):
-        def __init__(self, monitor='val_loss', mode='auto', verbose=0):
-            super(BestWeight, self).__init__()
-            self.monitor = monitor
-            self.mode = mode
-            self.best_weights = None
-            self.verbose = verbose
-            if mode == 'min':
-                self.monitor_op = np.less
-                self.best = np.Inf
-            elif mode == 'max':
-                self.monitor_op = np.greater
-                self.best = -np.Inf
-            else:
-                if 'acc' in self.monitor:
-                    self.monitor_op = np.greater
-                    self.best = -np.Inf
-                else:
-                    self.monitor_op = np.less
-                    self.best = np.Inf
-
-        def get_best(self):
-            return self.best_weights
-
-        def on_epoch_end(self, epoch, logs={}):
-            current = logs.get(self.monitor)
-            if current is not None and self.monitor_op(current, self.best):
-                self.best_weights = self.model.get_weights()
-                if self.verbose > 0:
-                    print("Epoch {}: {} improved from {} to {}".format(epoch, self.monitor, self.best, current))
-                self.best = current
 
     model = Sequential()
     gpu_cpu = 'gpu'
@@ -115,7 +86,7 @@ def do_model(all_data):
 
     history = model.fit(
         X_train, Y_train,
-        verbose=1,
+        verbose=0,
         batch_size=batch_size,
         nb_epoch=30,
         validation_split=0.3,

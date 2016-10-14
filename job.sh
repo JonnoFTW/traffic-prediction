@@ -11,7 +11,7 @@ echo "Running traffic predict"
 declare -a arr=("1" "3" "6" "9" "12")
 for i in "${arr[@]}"
 do
-    print "Starting step $i"
+    echo "Starting step $i"
     python /home/mack0242/traffic-prediction/main.py $i lane_data.csv
 done
 

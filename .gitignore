@@ -136,3 +136,5 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
+models
+models/*
