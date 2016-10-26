@@ -5,6 +5,7 @@ from datetime import datetime, date
 import numpy as np
 import pluck as pluck
 import tabulate
+import pyprind
 
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
@@ -19,17 +20,22 @@ from utils import load_data, train_test_split, BestWeight
 
 EPS = 1e-6
 def step_data(FPATH, end_date=None):
-    all_data = load_data(FPATH, EPS, end_date=end_date, use_sensors=[5])
+    all_data = load_data(FPATH, EPS, end_date=end_date)
     return all_data
+
+
+def chunks(x, y, n):
+    """Yield successive n-sized chunks from l."""
+    for i in xrange(0, len(x), n):
+        yield x[i:i + n], y[i:i + n]
 
 
 def do_model(all_data, steps, run_model=True):
     _steps = steps
     print("steps:", _steps)
-    scaler = MinMaxScaler()
-    all_data = scaler.fit_transform(all_data)
+    all_data = all_data
     if not run_model:
-        return None, None, scaler
+        return None, None
     features = all_data[:-_steps]
     labels = all_data[_steps:, -1:]
     tts = train_test_split(features, labels, test_size=0.4)
@@ -39,14 +45,38 @@ def do_model(all_data, steps, run_model=True):
     Y_test = tts[3].astype(np.float64)
 
 
-
+    #
     optimiser = 'adam'
-    hidden_neurons = 200
-    loss_function = 'mse'
-    batch_size = 105
-    dropout = 0.056
-    inner_hidden_neurons = 269
-    dropout_inner = 0.22
+    # hidden_neurons = 300
+    # loss_function = 'mse'
+    # batch_size = 105
+    # dropout = 0.056
+    # inner_hidden_neurons = 269
+    # dropout_inner = 0.22
+
+    if steps == 1:
+        hidden_neurons = 332
+        loss_function = 'mse'
+        batch_size = 128
+        dropout = 0.0923
+        inner_hidden_neurons = 269
+        dropout_inner = 0.2269
+    elif steps == 3:
+        hidden_neurons = 256
+        loss_function = 'mse'
+        batch_size = 105
+        dropout = 0.0923
+        inner_hidden_neurons = 72
+        dropout_inner = 0.001
+    else:
+        hidden_neurons = 332
+        loss_function = 'mse'
+        batch_size = 105
+        dropout = 0.0042
+        inner_hidden_neurons = 329
+        dropout_inner = 0.1314
+    batch_size = 6
+
 
     X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
     X_test = X_test.reshape(X_test.shape[0], 1, X_test.shape[1])
@@ -76,39 +106,70 @@ def do_model(all_data, steps, run_model=True):
 
     model.compile(loss=loss_function, optimizer=optimiser)
 
-    history = model.fit(
-        X_train, Y_train,
-        verbose=0,
-        batch_size=batch_size,
-        nb_epoch=30,
-        validation_split=0.3,
-        shuffle=False,
-        callbacks=[best_weight]
-    )
+    # run through all the training data
+    # learning training set
+    print("Learning training set")
+    # progress = pyprind.ProgBar(len(X_train)/batch_size +1, width=50, stream=1)
+    for x_chunk, y_chunk in chunks(X_train, Y_train, batch_size):
 
-    model.set_weights(best_weight.get_best())
-    predicted = model.predict(X_test) + EPS
-    rmse_val = rmse(Y_test, predicted)
+        model.fit(
+            x_chunk, y_chunk,
+            verbose=0,
+            batch_size=batch_size,
+            nb_epoch=20,
+            validation_split=0.3,
+            shuffle=False,
+            callbacks=[best_weight]
+        )
+        # progress.update()
+    print()
+
+    geh_l = []
+    rmse_l = []
+    mape_l = []
+    # progress = pyprind.ProgBar(len(X_test) / batch_size +1, width=50, stream=1)
+    for x_chunk, y_chunk in chunks(X_test, Y_test, batch_size):
+        # start collecting stats
+        predicted = model.predict(x_chunk) + EPS
+        geh_l.append(geh(y_chunk, predicted))
+        rmse_l.append(rmse(y_chunk, predicted))
+        mape_l.append(mape(y_chunk, predicted))
+        # learn the batch we've just seen
+        model.fit(
+            x_chunk, y_chunk,
+            verbose=0,
+            batch_size=batch_size,
+            nb_epoch=20,
+            validation_split=0.3,
+            shuffle=False,
+            callbacks=[best_weight]
+        )
+        # progress.update()
+    print()
+        # predict on the same chunk and collect stats, averaging them
     metrics = OrderedDict([
-        # ('hidden', hidden_neurons),
+        ('online', True),
+        ('hidden', hidden_neurons),
         ('steps', _steps),
-        ('geh', geh(Y_test, predicted)),
-        ('rmse', rmse_val),
-        ('mape', mean_absolute_percentage_error(Y_test, predicted)),
+        ('geh', np.mean(geh_l)),
+        ('rmse', np.mean(rmse_l)),
+        ('mape', np.mean(mape_l)),
         # ('smape', smape(predicted, _Y_test)),
         # ('median_pe', median_percentage_error(predicted, Y_test)),
         # ('mase', MASE(_Y_train, _Y_test, predicted)),
         # ('mae', mean_absolute_error(y_true=Y_test, y_pred=predicted)),
-        # ('batch_size', batch_size),
+        ('batch_size', batch_size),
         # ('optimiser', optimiser),
-        # ('dropout', dropout),
-        # ('extra_layer_dropout', dropout_inner),
-        # ('extra_layer_neurons', inner_hidden_neurons),
+        ('dropout', dropout),
+        ('extra_layer_dropout', dropout_inner),
+        ('extra_layer_neurons', inner_hidden_neurons),
         # ('loss function', loss_function)
         # 'history': history.history
     ])
 
-    return metrics, model, scaler
+    # print (tabulate.tabulate([metrics], tablefmt='latex', headers='keys'))
+
+    return metrics, model
 
 
 if __name__ == "__main__":
@@ -121,11 +182,14 @@ if __name__ == "__main__":
     start = datetime.now()
     for file_path in sys.argv[1:]:
         print ("Examining", file_path)
-        data = step_data(file_path, datetime(2013,4,23))
-        # metrics = []
+        data = step_data(file_path)
+        metrics = []
         # fname = file_path.split('/')[-1]
-        # for i in [1]:#, 3, 6, 9, 12]:
-        metric_out, model, scaler = do_model(data, 1, run_model=False)
+        for i in [1]:
+            metric_out, model = do_model(data, i, run_model=True)
+            metrics.append(metric_out)
+        print(tabulate.tabulate(metrics, tablefmt='latex', headers='keys'))
+        continue
         model = load_model('models/keras_1_step_3002_scaled.h5')
         #     metrics.append(metric_out)
         #     model.save('models/keras_{}_step_{}_sensor5.h5'.format(i, fname))
@@ -156,10 +220,10 @@ if __name__ == "__main__":
                 dt.minute,
                 max(1, true_y[idx])
             ]]
-            in_row = scaler.fit_transform(scaler.fit_transform(in_row))
+            # in_row = scaler.fit_transform(scaler.fit_transform(in_row))
             pred = model.predict(np.array([in_row]))
             # flow_val = pred[0][0]
-            pred_y.append(scaler.inverse_transform([0,0,0,0,0,pred[0][0]]))
+            # pred_y.append(scaler.inverse_transform([0,0,0,0,0,pred[0][0]]))
         true_x = true_x[1:]
         true_y = true_y[1:]
         pred_y = pred_y[:-1]

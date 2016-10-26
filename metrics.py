@@ -24,6 +24,7 @@ def mean_absolute_percentage_error(y_true, y_pred):
 
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
+mape = mean_absolute_percentage_error
 
 def rmse(y_true, y_pred):
     return np.sqrt(((y_pred - y_true) ** 2).mean(axis=0))[0]

@@ -50,7 +50,7 @@ def check_gpu():
 def load_holidays():
     dates =[]
     return set(dates)
-def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_sensors=None):
+def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_sensors=None, end_date=None):
     docX = []
     print("Loading Data")
     rows = 0
@@ -63,6 +63,8 @@ def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_
             if rows > limit:
                 break
             dt = datetime.strptime(row['timestamp'], "%Y-%m-%d %H:%M:%S")
+            if end_date is not None and dt >= end_date:
+                break
             if load_from is not None and dt <= load_from:
                 continue
             if type(use_sensors) is list:
@@ -78,7 +80,7 @@ def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_
                     # is weekend
                     int(dt.weekday() in [5, 6]),
                     # week of year
-                    dt.isocalendar()[1],
+                    # dt.isocalendar()[1],
                     #is holiday
                     # int(dt in holidays),
                     # hour of day
