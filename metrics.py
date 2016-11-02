@@ -16,7 +16,7 @@ def mean_absolute_percentage_error(y_true, y_pred):
     Out[]: 24.791666666666668
     """
 
-    y_true, y_pred = check_array(y_true), check_array(y_pred)
+    # y_true, y_pred = check_array(y_true), check_array(y_pred)
 
     # Note: does not handle mix 1d representation
     # if _is_1d(y_true):

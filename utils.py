@@ -104,6 +104,18 @@ def train_test_split(x, y, test_size=0.33):
     return x[:split_idx], x[split_idx:], y[:split_idx], y[split_idx:]
 
 
+class ResetStatesCallback(Callback):
+    def __init__(self, max_len=20):
+        self.counter = 0
+        self.max_len = max_len
+
+    def on_batch_begin(self, batch, logs={}):
+        if self.counter % self.max_len == 0:
+            print("Resetting states")
+            self.model.reset_states()
+        self.counter += 1
+
+
 class BestWeight(Callback):
     def __init__(self, monitor='val_loss', mode='auto', verbose=0):
         super(BestWeight, self).__init__()

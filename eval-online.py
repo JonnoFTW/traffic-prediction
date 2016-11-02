@@ -15,7 +15,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 
 from metrics import MASE, mean_absolute_percentage_error, median_percentage_error, rmse, geh, mape
-from utils import load_data, train_test_split, BestWeight
+from utils import load_data, train_test_split, BestWeight, ResetStatesCallback
 
 
 EPS = 1e-6
@@ -34,6 +34,7 @@ def do_model(all_data, steps, run_model=True):
     _steps = steps
     print("steps:", _steps)
     all_data = all_data
+
     if not run_model:
         return None, None
     features = all_data[:-_steps]
@@ -75,8 +76,9 @@ def do_model(all_data, steps, run_model=True):
         dropout = 0.0042
         inner_hidden_neurons = 329
         dropout_inner = 0.1314
-    batch_size = 6
 
+    batch_size = 1
+    nb_epochs = 1
 
     X_train = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
     X_test = X_test.reshape(X_test.shape[0], 1, X_test.shape[1])
@@ -92,12 +94,13 @@ def do_model(all_data, steps, run_model=True):
     model = Sequential()
     gpu_cpu = 'cpu'
     best_weight = BestWeight()
-    model.add(LSTM(output_dim=hidden_neurons, input_dim=in_neurons, return_sequences=True, init='uniform',
-                   consume_less=gpu_cpu))
+    reset_state = ResetStatesCallback()
+    model.add(LSTM(output_dim=hidden_neurons, input_dim=in_neurons, batch_input_shape=(1,1, in_neurons) ,return_sequences=True, init='uniform',
+                   consume_less=gpu_cpu, stateful=True))
     model.add(Dropout(dropout))
 
     dense_input = inner_hidden_neurons
-    model.add(LSTM(output_dim=dense_input, input_dim=hidden_neurons, return_sequences=False, consume_less=gpu_cpu))
+    model.add(LSTM(output_dim=dense_input, input_dim=hidden_neurons, return_sequences=False, consume_less=gpu_cpu, stateful=True))
     model.add(Dropout(dropout_inner))
     model.add(Activation('relu'))
 
@@ -105,46 +108,42 @@ def do_model(all_data, steps, run_model=True):
     model.add(Activation('relu'))
 
     model.compile(loss=loss_function, optimizer=optimiser)
-
     # run through all the training data
     # learning training set
     print("Learning training set")
     # progress = pyprind.ProgBar(len(X_train)/batch_size +1, width=50, stream=1)
-    for x_chunk, y_chunk in chunks(X_train, Y_train, batch_size):
+    for epoch in xrange(nb_epochs):
+        mean_tr_loss = []
+        print("Epoch {}".format(epoch))
+        for x_chunk, y_chunk in chunks(X_train, Y_train, batch_size):
+            tr_loss = model.train_on_batch(x_chunk, y_chunk)
+            mean_tr_loss.append(tr_loss)
+            model.reset_states()
 
-        model.fit(
-            x_chunk, y_chunk,
-            verbose=0,
-            batch_size=batch_size,
-            nb_epoch=20,
-            validation_split=0.3,
-            shuffle=False,
-            callbacks=[best_weight]
-        )
-        # progress.update()
-    print()
 
-    geh_l = []
-    rmse_l = []
-    mape_l = []
-    # progress = pyprind.ProgBar(len(X_test) / batch_size +1, width=50, stream=1)
-    for x_chunk, y_chunk in chunks(X_test, Y_test, batch_size):
-        # start collecting stats
-        predicted = model.predict(x_chunk) + EPS
-        geh_l.append(geh(y_chunk, predicted))
-        rmse_l.append(rmse(y_chunk, predicted))
-        mape_l.append(mape(y_chunk, predicted))
-        # learn the batch we've just seen
-        model.fit(
-            x_chunk, y_chunk,
-            verbose=0,
-            batch_size=batch_size,
-            nb_epoch=20,
-            validation_split=0.3,
-            shuffle=False,
-            callbacks=[best_weight]
-        )
-        # progress.update()
+        print("Training Loss: {}".format(np.mean(mean_tr_loss)))
+
+
+        geh_l = []
+        rmse_l = []
+        mape_l = []
+        training_done = 0
+        # progress = pyprind.ProgBar(len(X_test) / batch_size +1, width=50, stream=1)
+        for x_chunk, y_chunk in chunks(X_test, Y_test, batch_size):
+
+            # start collecting stats
+            predicted = model.predict_on_batch(x_chunk) + EPS
+            model.reset_states()
+            model.train_on_batch(x_chunk, y_chunk)
+            model.reset_states()
+
+            geh_l.append(geh(y_chunk, predicted))
+            rmse_l.append(rmse(y_chunk, predicted))
+            mape_l.append(mape(y_chunk, predicted))
+
+            # progress.update()
+
+        print("Testing RMSE: {} GEH: {} MAPE: {}".format(np.mean(rmse_l), np.mean(geh_l), np.mean(mape_l)))
     print()
         # predict on the same chunk and collect stats, averaging them
     metrics = OrderedDict([
@@ -180,27 +179,23 @@ if __name__ == "__main__":
     except IndexError:
         quit("Usage is: evaluate.py <file_path_1> <file_path_2> ...")
     start = datetime.now()
-    for file_path in sys.argv[1:]:
+    for file_path in reversed(sys.argv[1:]):
         print ("Examining", file_path)
         data = step_data(file_path)
         metrics = []
-        # fname = file_path.split('/')[-1]
+        fname = file_path.split('/')[-1]
+        print (fname)
         for i in [1]:
+            print("Evaluating {} steps".format(i))
             metric_out, model = do_model(data, i, run_model=True)
             metrics.append(metric_out)
+            model.save('models/keras_{}_step_{}_online.h5'.format(i, fname))
         print(tabulate.tabulate(metrics, tablefmt='latex', headers='keys'))
-        continue
-        model = load_model('models/keras_1_step_3002_scaled.h5')
-        #     metrics.append(metric_out)
-        #     model.save('models/keras_{}_step_{}_sensor5.h5'.format(i, fname))
-        # # model has:       1  1.45893  14.3746  34.0476
         # # print("Loading model")
         # # model = load_model('best_sensor_5_with_calendar.h5')
         # #
         # print("Finished in "+str(datetime.now() - start))
         # print(tabulate.tabulate(metrics, headers='keys', tablefmt="latex"))
-        #
-        # model = load_model('models/keras_1_step_lane_data_3002_3001.csv_sensor5.h5')
         print("Loading impute data")
         predict_data = load_data(file_path, EPS, use_datetime=True, load_from=datetime(2013, 4, 23), use_sensors=[5], end_date=datetime(2013, 6, 15))
         true_x = predict_data[:, 0]
