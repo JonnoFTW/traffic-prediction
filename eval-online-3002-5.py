@@ -1,10 +1,11 @@
 from __future__ import print_function
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import pyprind
 
-from keras.models import Sequential
+import theano
+from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.layers.recurrent import LSTM
 
@@ -55,7 +56,10 @@ def do_model(all_data, steps):
     out_neurons = 1
 
     model = Sequential()
-    gpu_cpu = 'cpu'
+    if 'gpu' in theano.config.device:
+        gpu_cpu = 'gpu'
+    else:
+        gpu_cpu = 'cpu'
     model.add(LSTM(output_dim=hidden_neurons, input_dim=in_neurons, batch_input_shape=(1,1, in_neurons) ,return_sequences=True, init='uniform',
                    consume_less=gpu_cpu, stateful=True))
     model.add(Dropout(dropout))
@@ -86,19 +90,20 @@ def do_model(all_data, steps):
 if __name__ == "__main__":
     start = datetime.now()
     file_path = '/scratch/Dropbox/PhD/htm_models_adelaide/engine/lane_data_3002_3001.csv'
-    print ("Examining", file_path)
-    data = step_data(file_path)#, end_date=datetime(2013, 4, 23), use_sensors=5)
-    fname = file_path.split('/')[-1]
-    print (fname)
-    model = do_model(data, 1)
-    model.save('models/keras_1_step_3002_online_pre_test.h5')
+    # print ("Examining", file_path)
+    # data = step_data(file_path)#, end_date=datetime(2013, 4, 23), use_sensors=5)
+    # fname = file_path.split('/')[-1]
+    # print (fname)
+    # model = do_model(data, 1)
+    model = load_model('models/keras_1_step_3002_online_pre_test.h5')
     predict_data = load_data(file_path, EPS, use_datetime=True, load_from=datetime(2013, 4, 23), use_sensors=[5], end_date=datetime(2013, 6, 15))
+
     true_x = predict_data[:, 0]
     true_y = predict_data[:, 1].astype(np.float32)
     # replace 2046/2047 values with 50
     true_y[true_y > 2045] = -1
-    pred_y = []
-    progress = pyprind.ProgBar(len(true_x), width=50, stream=1)
+    pred_xy = []
+    progress = pyprind.ProgBar(len(true_x[:-1]), width=50, stream=1)
     # flow_val = 8
     for idx, dt in enumerate(true_x[:-1]):
         in_row = [[
@@ -116,21 +121,23 @@ if __name__ == "__main__":
         model.train_on_batch(npa, np.array([true_y[idx+1]]).reshape((1, 1)))
         model.reset_states()
 
-        pred_y.append(pred[0])
+        pred_xy.append((dt+timedelta(minutes=5), pred[0]))
         progress.update()
-    true_x = true_x[1:]
-    true_y = true_y[1:]
-    pred_y = pred_y[:-1]
-    pred_y = np.array(pred_y, dtype=np.float32)
-    true_y_max = np.copy(true_y)
+
+    pred_xy = np.array(pred_xy)
+    pred_x = np.reshape(pred_xy[:,0], (-1,1))
+    pred_y = np.reshape(pred_xy[:,1].astype(dtype=np.float32), (-1,1))
+    true_y_max = np.copy(true_y)[:-1]
     true_y_max[true_y_max == 0] = 1
-    print("GEH:  ", geh(true_y, pred_y))
+    print("PredY",pred_y.shape)
+    print("TrueT_max", true_y_max.shape)
+    print("GEH:  ", geh (true_y_max, pred_y))
     print("MAPE: ", mape(true_y_max, pred_y))
-    print("RMSE: ", rmse(true_y, pred_y))
+    print("RMSE: ", rmse(true_y_max, pred_y))
 
     import matplotlib.pyplot as plt
     plt.plot(true_x, true_y, 'b-', label='Readings')
-    plt.plot(true_x, pred_y, 'r-', label='LSTM-Online Predictions')
+    plt.plot(pred_x, pred_y, 'r-', label='LSTM-Online Predictions')
     df = "%A %d %B, %Y"
     plt.title("3002: Traffic Flow from {} to {}".format(true_x[0].strftime(df), true_x[-1].strftime(df)))
     plt.legend()
