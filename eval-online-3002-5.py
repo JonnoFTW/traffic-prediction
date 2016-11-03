@@ -73,6 +73,7 @@ def do_model(all_data, steps):
     progress = pyprind.ProgBar(len(X_train), width=50, stream=1)
     mean_tr_loss = []
     for x_chunk, y_chunk in chunks(X_train, Y_train, batch_size):
+
         tr_loss = model.train_on_batch(x_chunk, y_chunk)
         mean_tr_loss.append(tr_loss)
         model.reset_states()
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     fname = file_path.split('/')[-1]
     print (fname)
     model = do_model(data, 1)
-
+    model.save('models/keras_1_step_3002_online_pre_test.h5')
     predict_data = load_data(file_path, EPS, use_datetime=True, load_from=datetime(2013, 4, 23), use_sensors=[5], end_date=datetime(2013, 6, 15))
     true_x = predict_data[:, 0]
     true_y = predict_data[:, 1].astype(np.float32)
@@ -99,7 +100,7 @@ if __name__ == "__main__":
     pred_y = []
     progress = pyprind.ProgBar(len(true_x), width=50, stream=1)
     # flow_val = 8
-    for idx, dt in enumerate(true_x):
+    for idx, dt in enumerate(true_x[:-1]):
         in_row = [[
             dt.weekday(),
             # is weekend
@@ -108,7 +109,13 @@ if __name__ == "__main__":
             dt.minute,
             max(1, true_y[idx])
         ]]
+        npa = np.array([in_row])
         pred = model.predict(np.array([in_row]))
+        model.reset_states()
+
+        model.train_on_batch(npa, np.array([true_y[idx+1]]).reshape((1, 1)))
+        model.reset_states()
+
         pred_y.append(pred[0])
         progress.update()
     true_x = true_x[1:]
