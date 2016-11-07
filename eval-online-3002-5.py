@@ -15,6 +15,7 @@ from utils import load_data, train_test_split, BestWeight, ResetStatesCallback
 
 
 EPS = 1e-6
+sequence_length = 50
 
 def step_data(FPATH, end_date=None, use_sensors=None):
     all_data = load_data(FPATH, EPS, use_sensors=use_sensors)
@@ -30,7 +31,7 @@ def chunks(x, y, n):
 def do_model(all_data, steps):
     _steps = steps
     print("steps:", _steps)
-    # all_data = all_data[:100]
+    # all_data = all_data[:200]
     features = all_data[:-_steps]
     labels = all_data[_steps:, -1:]
 
@@ -76,12 +77,16 @@ def do_model(all_data, steps):
     # run through all data up to 23 April, 2013
     progress = pyprind.ProgBar(len(X_train), width=50, stream=1)
     mean_tr_loss = []
+    seq = 0
     for x_chunk, y_chunk in chunks(X_train, Y_train, batch_size):
 
         tr_loss = model.train_on_batch(x_chunk, y_chunk)
         mean_tr_loss.append(tr_loss)
-        # model.reset_states()
+        seq += 1
+        if seq % sequence_length == 0:
+            model.reset_states()
         progress.update()
+
 
     print("\nTraining Loss: {}".format(np.mean(mean_tr_loss)))
     return model
@@ -98,11 +103,12 @@ if __name__ == "__main__":
     data = step_data(file_path, end_date=datetime(2013, 4, 23), use_sensors=5)
     fname = file_path.split('/')[-1]
     print (fname)
+    model_name = 'models/keras_1_step_3002_online_no_state_reset.h5'
     model = do_model(data, 1)
-    model.save('models/keras_1_step_3002_online_no_state_reset.h5')
-    # model = load_model('models/keras_1_step_3002_online_pre_test.h5')
+    model.save(model_name)
+    # model = load_model(model_name)
     predict_data = load_data(file_path, EPS, use_datetime=True, load_from=datetime(2013, 4, 23), use_sensors=[5], end_date=datetime(2013, 6, 15))
-
+    print("Predict_data shape:", predict_data.shape)
     true_x = predict_data[:, 0]
     true_y = predict_data[:, 1].astype(np.float32)
     # replace 2046/2047 values with 50
@@ -110,6 +116,7 @@ if __name__ == "__main__":
     pred_xy = []
     progress = pyprind.ProgBar(len(true_x[:-1]), width=50, stream=1)
     # flow_val = 8
+    seq = 0
     for idx, dt in enumerate(true_x[:-1]):
         in_row = [[
             dt.weekday(),
@@ -121,8 +128,9 @@ if __name__ == "__main__":
         ]]
         npa = np.array([in_row])
         pred = model.predict(npa)
-        # model.reset_states()
-        model.state
+        seq += 1
+        if seq % sequence_length == 0:
+            model.reset_states()
         model.train_on_batch(npa, np.array([true_y[idx+1]]).reshape((1, 1)))
         # model.reset_states()
 
@@ -148,4 +156,9 @@ if __name__ == "__main__":
 
     plt.ylabel("Vehicles/ 5 min")
     plt.xlabel("Time")
-    plt.show()
+    import os
+    if os.getenv('DISPLAY',None):
+        plt.show()
+    else:
+        out_img_name = model_name.split('/')[1][:-4]+'.png'
+        plt.savefig(out_img_name)
