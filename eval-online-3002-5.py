@@ -80,7 +80,7 @@ def do_model(all_data, steps):
 
         tr_loss = model.train_on_batch(x_chunk, y_chunk)
         mean_tr_loss.append(tr_loss)
-        model.reset_states()
+        # model.reset_states()
         progress.update()
 
     print("\nTraining Loss: {}".format(np.mean(mean_tr_loss)))
@@ -89,13 +89,18 @@ def do_model(all_data, steps):
 
 if __name__ == "__main__":
     start = datetime.now()
-    file_path = '/scratch/Dropbox/PhD/htm_models_adelaide/engine/lane_data_3002_3001.csv'
-    # print ("Examining", file_path)
-    # data = step_data(file_path)#, end_date=datetime(2013, 4, 23), use_sensors=5)
-    # fname = file_path.split('/')[-1]
-    # print (fname)
-    # model = do_model(data, 1)
-    model = load_model('models/keras_1_step_3002_online_pre_test.h5')
+    import sys
+    if len(sys.argv) >= 2:
+        file_path = sys.argv[1]
+    else:
+        file_path = '/scratch/Dropbox/PhD/htm_models_adelaide/engine/lane_data_3002_3001.csv'
+    print ("Examining", file_path)
+    data = step_data(file_path, end_date=datetime(2013, 4, 23), use_sensors=5)
+    fname = file_path.split('/')[-1]
+    print (fname)
+    model = do_model(data, 1)
+    model.save('models/keras_1_step_3002_online_no_state_reset.h5')
+    # model = load_model('models/keras_1_step_3002_online_pre_test.h5')
     predict_data = load_data(file_path, EPS, use_datetime=True, load_from=datetime(2013, 4, 23), use_sensors=[5], end_date=datetime(2013, 6, 15))
 
     true_x = predict_data[:, 0]
@@ -115,23 +120,22 @@ if __name__ == "__main__":
             max(1, true_y[idx])
         ]]
         npa = np.array([in_row])
-        pred = model.predict(np.array([in_row]))
-        model.reset_states()
-
+        pred = model.predict(npa)
+        # model.reset_states()
+        model.state
         model.train_on_batch(npa, np.array([true_y[idx+1]]).reshape((1, 1)))
-        model.reset_states()
+        # model.reset_states()
 
         pred_xy.append((dt+timedelta(minutes=5), pred[0]))
         progress.update()
 
     pred_xy = np.array(pred_xy)
-    pred_x = np.reshape(pred_xy[:,0], (-1,1))
-    pred_y = np.reshape(pred_xy[:,1].astype(dtype=np.float32), (-1,1))
+    pred_x = np.reshape(pred_xy[:, 0], (-1, 1))
+    pred_y = np.reshape(pred_xy[:, 1].astype(dtype=np.float32), (-1, 1))
     true_y_max = np.copy(true_y)[:-1]
     true_y_max[true_y_max == 0] = 1
-    print("PredY",pred_y.shape)
-    print("TrueT_max", true_y_max.shape)
-    print("GEH:  ", geh (true_y_max, pred_y))
+
+    print("GEH:  ", geh(true_y_max, pred_y))
     print("MAPE: ", mape(true_y_max, pred_y))
     print("RMSE: ", rmse(true_y_max, pred_y))
 
