@@ -50,11 +50,14 @@ def check_gpu():
 def load_holidays():
     dates =[]
     return set(dates)
-def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_sensors=None, end_date=None):
+
+
+def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_sensors=None, end_date=None, skip_error=True):
     docX = []
     print("Loading Data")
     rows = 0
-    holidays = load_holidays()
+    # holidays = load_holidays()
+    dates = []
     with open(fname, 'r') as infile:
         reader = DictReader(infile)
         fields = reader.fieldnames
@@ -71,29 +74,29 @@ def load_data(fname, EPS, use_datetime=False, load_from=None, limit=np.inf, use_
                 counts = [int(row[x]) for x in fields[1:] if int(x) in use_sensors]
             else:
                 counts = [int(row[x]) for x in fields[1:]]
-            if any(map(lambda c: c > 300, counts)) and not use_datetime:
+            if any(map(lambda c: c > 300, counts)) and not skip_error:
                 # don't list those values that are extremely high
                 continue
-            if not use_datetime:
-                x_row = [
-                    dt.weekday(),
-                    # is weekend
-                    int(dt.weekday() in [5, 6]),
-                    # week of year
-                    # dt.isocalendar()[1],
-                    #is holiday
-                    # int(dt in holidays),
-                    # hour of day
-                    dt.hour,
-                    dt.minute,
-                    max(1, sum(counts) + EPS)
-                ]
-            else:
-                x_row = [
-                    dt, sum(counts)
-                ]
+
+            x_row = [
+                dt.weekday(),
+                # is weekend
+                int(dt.weekday() in [5, 6]),
+                # week of year
+                # dt.isocalendar()[1],
+                #is holiday
+                # int(dt in holidays),
+                # hour of day
+                dt.hour,
+                dt.minute,
+                max(1, sum(counts) + EPS)
+            ]
+            if use_datetime:
+                dates.append(dt)
             docX.append(x_row)
     print("Data loaded")
+    if use_datetime:
+        return np.array(docX), np.array(dates)
     return np.array(docX)
 
 
@@ -147,4 +150,3 @@ class BestWeight(Callback):
             if self.verbose > 0:
                 print("Epoch {}: {} improved from {} to {}".format(epoch, self.monitor, self.best, current))
             self.best = current
-

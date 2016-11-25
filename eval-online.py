@@ -229,6 +229,10 @@ if __name__ == "__main__":
         print("MAPE: ", mape(true_y_max, pred_y))
         print("RMSE: ", np.sqrt(((pred_y - true_y_max) ** 2).mean(axis=0)))
 
+        font = {'size': 30}
+        import matplotlib
+
+        matplotlib.rc('font', **font)
         import matplotlib.pyplot as plt
         plt.plot(true_x, true_y, 'b-', label='Readings')
         plt.plot(true_x, pred_y, 'r-', label='Predictions')
