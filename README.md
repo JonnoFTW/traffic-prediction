@@ -1,6 +1,6 @@
 # LSTM Based Traffic Prediction
 
-This project seeks to use LSTM for traffic prediction using the [Keras](https://keras.io/) frontend for [Theano](http://deeplearning.net/software/theano/). Hyperparameter optimisation is used to find the best set of parameters for the network, which I found to be:
+This project seeks to use LSTM for traffic prediction using the [Keras](https://keras.io/) frontend for [Theano](http://deeplearning.net/software/theano/). Hyperparameter optimisation is used to find the best set of parameters for the network.
 
 ### Usage
 
@@ -13,10 +13,9 @@ pip install -r requirements.txt
 Then edit [main.py](https://github.com/JonnoFTW/traffic-prediction/blob/master/main.py) so that it uses your own parameters for the network. It will attempt to store hyperparameter results in mongodb. You can use [show_results.py](https://github.com/JonnoFTW/traffic-prediction/blob/master/show_results.py) to view them. Please keep in mind this for experimentation only and not appropriate for production.
 
 
-
 Run using:
 ```
-python main.py 1 /path/to/some.csv
+python main.pymain.py <steps eg. 1> </path/to/data.csv> <train_test_split eg. 0.75> <num_epochs eg. 10> <model_trials eg. 20>
 ```
 
 The CSV should have a the following format:
